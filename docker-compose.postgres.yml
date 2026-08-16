@@ -1,0 +1,88 @@
+name: nextcloud
+
+# PostgreSQL variant. Use INSTEAD OF docker-compose.yml, not alongside it:
+#
+#   docker compose -f docker-compose.postgres.yml up -d
+#
+# Pick one engine before the first install and stick with it. Nextcloud
+# writes the choice into config/config.php during setup, and switching
+# afterwards needs a full data migration, not a compose edit.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nextcloud}
+      POSTGRES_USER: ${POSTGRES_USER:-nextcloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nextcloud} -d ${POSTGRES_DB:-nextcloud}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    image: nextcloud:stable-apache
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - nextcloud:/var/www/html
+      - data:/var/www/html/data
+    environment:
+      # Bare hostname is correct here. Only add ":5432" if you remapped
+      # the port - the installer hint is generic, not a requirement.
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-nextcloud}
+      POSTGRES_USER: ${POSTGRES_USER:-nextcloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:-admin}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:?set NEXTCLOUD_ADMIN_PASSWORD in .env}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS:-localhost}
+      NEXTCLOUD_DATA_DIR: /var/www/html/data
+      REDIS_HOST: redis
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1G}
+      PHP_UPLOAD_LIMIT: ${PHP_UPLOAD_LIMIT:-10G}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/status.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  cron:
+    image: nextcloud:stable-apache
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - nextcloud:/var/www/html
+      - data:/var/www/html/data
+
+volumes:
+  db:
+  nextcloud:
+  data:

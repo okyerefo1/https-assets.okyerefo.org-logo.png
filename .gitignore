@@ -1,0 +1,14 @@
+# Real secrets - only .env.example belongs in git
+.env
+.env.*
+!.env.example
+
+# Bind-mount targets, if you switch away from named volumes
+/data/
+/db/
+/nextcloud/
+
+# Contains live credentials once rendered from the template
+config/autoconfig.php
+
+.DS_Store

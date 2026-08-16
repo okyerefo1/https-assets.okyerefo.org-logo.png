@@ -1,0 +1,99 @@
+name: nextcloud
+
+# Nextcloud + MariaDB + Redis.
+#
+# Uses NAMED VOLUMES for /var/www/html and /var/www/html/data. This is
+# deliberate: the official image's entrypoint chowns named volumes to
+# www-data (uid/gid 33) on first start, which is what prevents the
+# "Cannot create or write into the data directory" install error.
+# Read README.md before switching either one to a bind mount.
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    command: >
+      --transaction-isolation=READ-COMMITTED
+      --log-bin=binlog
+      --binlog-format=ROW
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: ${MYSQL_DATABASE:-nextcloud}
+      MARIADB_USER: ${MYSQL_USER:-nextcloud}
+      MARIADB_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MARIADB_AUTO_UPGRADE: "1"
+      MARIADB_DISABLE_UPGRADE_BACKUP: "1"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Cache/locking only - nothing here needs to survive a restart.
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    image: nextcloud:stable-apache
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - nextcloud:/var/www/html
+      - data:/var/www/html/data
+    environment:
+      MYSQL_HOST: db
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-nextcloud}
+      MYSQL_USER: ${MYSQL_USER:-nextcloud}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      # These four make the image write config/autoconfig.php for us and
+      # run the install unattended - no web setup form at all.
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:-admin}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:?set NEXTCLOUD_ADMIN_PASSWORD in .env}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS:-localhost}
+      NEXTCLOUD_DATA_DIR: /var/www/html/data
+      REDIS_HOST: redis
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1G}
+      PHP_UPLOAD_LIMIT: ${PHP_UPLOAD_LIMIT:-10G}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/status.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot unpacks the whole app tree and runs the installer.
+      start_period: 120s
+
+  # Background jobs. Without this, Nextcloud falls back to AJAX cron and
+  # the admin overview page complains.
+  cron:
+    image: nextcloud:stable-apache
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - nextcloud:/var/www/html
+      - data:/var/www/html/data
+
+volumes:
+  db:
+  nextcloud:
+  data:

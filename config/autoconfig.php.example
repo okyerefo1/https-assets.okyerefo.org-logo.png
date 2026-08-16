@@ -1,0 +1,47 @@
+<?php
+/**
+ * Manual autoconfig template.
+ *
+ * YOU PROBABLY DO NOT NEED THIS FILE. The official Docker image already
+ * writes config/autoconfig.php from the MYSQL_* / POSTGRES_* /
+ * NEXTCLOUD_ADMIN_* environment variables set in docker-compose.yml.
+ * That is what produced the "Autoconfig file detected" banner.
+ *
+ * Use this template only when installing outside Docker, or when you
+ * need a key the image's env vars do not cover (a custom table prefix,
+ * a data directory outside the web root).
+ *
+ * Install it as config/autoconfig.php, owned by the web server user:
+ *
+ *   sudo install -o www-data -g www-data -m 640 \
+ *     config/autoconfig.php.example /var/www/html/config/autoconfig.php
+ *
+ * Nextcloud DELETES this file automatically once the install succeeds.
+ * If it is still present afterwards, the install did not complete.
+ *
+ * Supplying adminlogin/adminpass makes setup fully unattended. Omit both
+ * to keep the web form, pre-filled with the database values below.
+ */
+
+$AUTOCONFIG = [
+    // 'mysql', 'pgsql', or 'sqlite3'. Must match the database you
+    // actually run - this is the setting the installer screen gets
+    // wrong most often.
+    'dbtype'        => 'mysql',
+
+    'dbname'        => 'nextcloud',
+    'dbuser'        => 'nextcloud',
+    'dbpass'        => 'CHANGE_ME',
+
+    // Compose service name. Append ':3306' / ':5432' only if you
+    // remapped the port off the default.
+    'dbhost'        => 'db',
+    'dbtableprefix' => 'oc_',
+
+    // Must be writable by the web server user (www-data, uid 33)
+    // BEFORE the installer runs. See README.md.
+    'directory'     => '/var/www/html/data',
+
+    'adminlogin'    => 'admin',
+    'adminpass'     => 'CHANGE_ME',
+];
