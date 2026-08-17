@@ -150,6 +150,41 @@ docker compose exec -u www-data app php occ \
     config:system:set has_internet_connection --type=boolean --value=false
 ```
 
+## The desktop client can't connect
+
+Nearly every desktop-sync failure against a containerised Nextcloud is a
+mismatch between the URL you type into the client and the address the
+server believes it has. Point the script at the URL exactly as you type
+it into the client:
+
+```bash
+./scripts/fix-desktop-client.sh https://cloud.example.com
+./scripts/fix-desktop-client.sh http://localhost:8080
+DRY_RUN=1 ./scripts/fix-desktop-client.sh https://cloud.example.com   # check only
+```
+
+It probes what the client probes — `status.php`, `remote.php/dav`, and the
+Login Flow v2 endpoint — then compares the answers against `occ`, adds the
+missing trusted domain, aligns the overwrite settings, and prints the
+`.env` lines that keep the repair across a `docker compose down`.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "Access through untrusted domain" | hostname not in `trusted_domains` | add it to `NEXTCLOUD_TRUSTED_DOMAINS` |
+| Login window opens `localhost:8080` and hangs | `overwritehost` / `overwrite.cli.url` unset behind a proxy | set `NEXTCLOUD_OVERWRITE*` |
+| Login window opens `http://` on an HTTPS site | `overwriteprotocol` unset | `NEXTCLOUD_OVERWRITEPROTOCOL=https` |
+| Sporadic login failures for everyone at once | `trusted_proxies` unset, so brute-force protection counts every user as one IP | `NEXTCLOUD_TRUSTED_PROXIES=<proxy address>` |
+| Connects, then sync 404s | `/remote.php` not reaching Apache | fix the proxy path rules |
+| Small files sync, large ones fail | proxy body limit | raise `client_max_body_size` / `LimitRequestBody`, check `PHP_UPLOAD_LIMIT` |
+
+The overwrite settings belong in `.env`, not only in `config.php`: the
+image applies them on every start, so they survive `docker compose down`.
+Setting them through `occ` alone works until the volume is recreated.
+
+A self-signed certificate is worth calling out separately — the desktop
+client rejects it outright, on some platforms with no prompt at all. The
+CA has to be in the OS trust store, not just the browser's.
+
 ## Database host
 
 `db` on its own is correct — it's the compose service name, resolved on
@@ -171,6 +206,7 @@ docker-compose.postgres.yml    PostgreSQL variant, use instead of the above
 config/autoconfig.php.example  manual template for non-Docker installs
 scripts/fix-data-permissions.sh
 scripts/fix-internet-connection.sh
+scripts/fix-desktop-client.sh
 ```
 
 ## Operations

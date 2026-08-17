@@ -70,6 +70,17 @@ services:
       REDIS_HOST: redis
       PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1G}
       PHP_UPLOAD_LIMIT: ${PHP_UPLOAD_LIMIT:-10G}
+      # What the server tells clients its own address is. Leave empty
+      # when you reach Nextcloud directly on HTTP_PORT. Set them when a
+      # reverse proxy fronts this stack, or the desktop client's login
+      # window opens http://localhost:8080 and hangs there.
+      # The image ignores empty values.
+      OVERWRITEHOST: ${NEXTCLOUD_OVERWRITEHOST:-}
+      OVERWRITEPROTOCOL: ${NEXTCLOUD_OVERWRITEPROTOCOL:-}
+      OVERWRITECLIURL: ${NEXTCLOUD_OVERWRITECLIURL:-}
+      # Space-separated. Without it every request appears to come from
+      # the proxy, so brute-force protection throttles all users at once.
+      TRUSTED_PROXIES: ${NEXTCLOUD_TRUSTED_PROXIES:-}
       # Outbound proxy, if the host needs one to reach the internet.
       # Empty by default. These cover curl/apt inside the container;
       # PHP reads its proxy from config.php instead, which is what
@@ -106,6 +117,13 @@ services:
       - nextcloud:/var/www/html
       - data:/var/www/html/data
     environment:
+      # reverse-proxy.config.php reads these at runtime in this container
+      # too, so cron-generated links (activity mails, share notices) use
+      # the public address instead of the container's own.
+      OVERWRITEHOST: ${NEXTCLOUD_OVERWRITEHOST:-}
+      OVERWRITEPROTOCOL: ${NEXTCLOUD_OVERWRITEPROTOCOL:-}
+      OVERWRITECLIURL: ${NEXTCLOUD_OVERWRITECLIURL:-}
+      TRUSTED_PROXIES: ${NEXTCLOUD_TRUSTED_PROXIES:-}
       # Same proxy as app. The PHP-level proxy comes from the shared
       # config.php on the nextcloud volume, so it is already covered.
       HTTP_PROXY: ${NEXTCLOUD_HTTP_PROXY:-}
