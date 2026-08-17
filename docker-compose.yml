@@ -70,6 +70,19 @@ services:
       REDIS_HOST: redis
       PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1G}
       PHP_UPLOAD_LIMIT: ${PHP_UPLOAD_LIMIT:-10G}
+      # Outbound proxy, if the host needs one to reach the internet.
+      # Empty by default. These cover curl/apt inside the container;
+      # PHP reads its proxy from config.php instead, which is what
+      # scripts/fix-internet-connection.sh writes.
+      HTTP_PROXY: ${NEXTCLOUD_HTTP_PROXY:-}
+      HTTPS_PROXY: ${NEXTCLOUD_HTTPS_PROXY:-}
+      NO_PROXY: ${NEXTCLOUD_NO_PROXY:-localhost,127.0.0.1,db,redis}
+    # Uncomment if the container cannot resolve names - a host running
+    # systemd-resolved on 127.0.0.53 is the usual cause, because
+    # containers cannot reach that address. See README.md.
+    # dns:
+    #   - 1.1.1.1
+    #   - 9.9.9.9
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/status.php"]
       interval: 30s
@@ -92,6 +105,12 @@ services:
     volumes:
       - nextcloud:/var/www/html
       - data:/var/www/html/data
+    environment:
+      # Same proxy as app. The PHP-level proxy comes from the shared
+      # config.php on the nextcloud volume, so it is already covered.
+      HTTP_PROXY: ${NEXTCLOUD_HTTP_PROXY:-}
+      HTTPS_PROXY: ${NEXTCLOUD_HTTPS_PROXY:-}
+      NO_PROXY: ${NEXTCLOUD_NO_PROXY:-localhost,127.0.0.1,db,redis}
 
 volumes:
   db:
